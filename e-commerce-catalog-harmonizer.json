@@ -1,0 +1,322 @@
+{
+  "name": "e-commerce-catalog-harmonizer",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -209.0588486482922
+      ],
+      "id": "8a9c6407-0119-4c49-8924-356dcd0bac0d",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "fileSelector": "/home/node/.n8n-files/fornitore_grezzo.csv",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        -209.0588486482922
+      ],
+      "id": "0db2ccee-6691-4405-8e4e-aa35ae6608e5",
+      "name": "Read/Write Files from Disk"
+    },
+    {
+      "parameters": {
+        "options": {
+          "headerRow": true
+        }
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        -209.0588486482922
+      ],
+      "id": "410722ce-bdf0-4c13-876b-ab8a54bc717f",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        672,
+        -209.0588486482922
+      ],
+      "id": "ab4dbdf4-0377-4b3c-8c7f-dcb0e796547e",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Nome: {{ $('Loop Over Items').item.json.product_name }}\nDescrizione: {{ $('Loop Over Items').item.json.description }}\nTaglia: {{ $('Loop Over Items').item.json.size }}\nCategoria Fornitore: {{ $('Loop Over Items').item.json.vendor_category }}\n",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=Sei un normalizzatore di cataloghi e-commerce B2B. Riceverai un prodotto con dati grezzi.  Il tuo unico compito è restituire un oggetto rigorosamente in formato JSON con le seguenti chiavi: - product_name: tradotto in italiano, iniziale maiuscola. - description: tradotta in italiano, pulita, massimo 20 parole. - size: standardizzata nel formato internazionale (S, M, L, XL). Se vedi \"US-L\" deve diventare \"L\". - category: mappa la 'vendor_category' in una di queste categorie standard: [Abbigliamento, Capispalla, Pantaloni].  Non aggiungere saluti, introduzioni o spiegazioni. Restituisci SOLO il JSON puro."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        896,
+        -209.0588486482922
+      ],
+      "id": "90ee4305-5dc1-4a97-92e0-bd1a1775d2a6",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        968,
+        14.941151351707788
+      ],
+      "id": "cb9cff50-a64a-4e85-9230-c79d76c1ac91",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "TB0IDxskFOuNkpLM",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Legge il testo dell'IA per il singolo record corrente\nconst output = JSON.parse($input.item.json.text);\n\n// Pulisce gli apostrofi\nif (output.product_name) output.product_name = output.product_name.replace(/'/g, \"''\");\nif (output.description) output.description = output.description.replace(/'/g, \"''\");\n\nreturn output;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        -209.0588486482922
+      ],
+      "id": "3d36da5f-2ead-4669-9371-7d3bdd24652b",
+      "name": "Code in JavaScript",
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO prodotti_armonizzati \n(codice_fornitore, nome_prodotto, descrizione, taglia, categoria, prezzo)\nVALUES \n(\n  '{{ $('Loop Over Items').item.json.id }}',\n  '{{ $json.product_name }}',\n  '{{ $json.description }}',\n  '{{ $json.size }}',\n  '{{ $json.category }}',\n  {{ $('Loop Over Items').item.json.price }}\n);\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1472,
+        -209.0588486482922
+      ],
+      "id": "a4e45034-a218-48cd-b37f-309212ca1eb5",
+      "name": "Execute a SQL query",
+      "executeOnce": false,
+      "credentials": {
+        "postgres": {
+          "id": "PguOgRYQgpUHEM8f",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT codice_fornitore, nome_prodotto, descrizione, taglia, categoria, prezzo \nFROM prodotti_armonizzati \nORDER BY id_interno DESC;\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1696,
+        -209.0588486482922
+      ],
+      "id": "e9599e33-d60a-431a-ae20-82022a962015",
+      "name": "Execute a SQL query1",
+      "executeOnce": true,
+      "alwaysOutputData": false,
+      "credentials": {
+        "postgres": {
+          "id": "PguOgRYQgpUHEM8f",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1920,
+        -209.0588486482922
+      ],
+      "id": "c3cbc3b2-a6db-466f-91c7-83206f5ebf0d",
+      "name": "Convert to File",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "/home/node/.n8n-files/catalogo_armonizzato_finale.xlsx",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        2144,
+        -209.0588486482922
+      ],
+      "id": "e1f55ed9-a9c8-4dc7-88fb-aa8f9f34fb31",
+      "name": "Read/Write Files from Disk1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query1": {
+      "main": [
+        [
+          {
+            "node": "Convert to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to File": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "51143d8a-4542-4d10-894d-6a4184ba5b04",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d4e800cc17066c8c4ebb7ba47cb71fd9dcaed8c182b49fe08b175055233bad32"
+  },
+  "id": "ubXfER8rxBOJoOit",
+  "tags": []
+}
